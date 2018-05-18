@@ -8,6 +8,9 @@ MAINTAINER Jeevan Patil "jeevanpaatil@gmail.com"
 ENV TOMCAT_VERSION 8.5.31
 ENV GRADLE_VERSION 4.7
 
+# Avoid ERROR: invoke-rc.d: policy-rc.d denied execution of start.
+RUN sed -i "s/^exit 101$/exit 0/" /usr/sbin/policy-rc.d
+
 # software properties
 RUN apt-get update && apt-get install -y software-properties-common && apt-get -y install curl && apt-get  -y install unzip
 
@@ -22,11 +25,6 @@ RUN \
 
 # Define commonly used JAVA_HOME variable
 ENV JAVA_HOME /usr/lib/jvm/java-8-oracle
-
-# Install Postgres.
-RUN apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
-RUN echo "deb http://apt.postgresql.org/pub/repos/apt/ precise-pgdg main" > /etc/apt/sources.list.d/pgdg.list
-RUN apt-get update && apt-get install -y postgresql-10 postgresql-client-10 postgresql-contrib-10
 
 # Install gradle.
 RUN cd /usr/lib \
@@ -47,4 +45,26 @@ RUN cp -Rv /tmp/apache-tomcat-${TOMCAT_VERSION}/* /usr/local/tomcat/
 EXPOSE 8080
 #CMD /usr/local/tomcat/bin/catalina.sh run
 
+# Install Postgres.
+RUN apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8
+RUN echo "deb http://apt.postgresql.org/pub/repos/apt/ precise-pgdg main" > /etc/apt/sources.list.d/pgdg.list
+RUN apt-get update && apt-get install -y postgresql-10 postgresql-client-10 postgresql-contrib-10
+USER postgres
+
+#RUN /etc/init.d/postgresql start
+
+# Adjust PostgreSQL configuration so that remote connections to the
+# database are possible.
+RUN echo "host all  all    0.0.0.0/0  md5" >> /etc/postgresql/10/main/pg_hba.conf
+
+# And add ``listen_addresses`` to ``/etc/postgresql/9.3/main/postgresql.conf``
+RUN echo "listen_addresses='*'" >> /etc/postgresql/10/main/postgresql.conf
+
+# Expose the PostgreSQL port
+EXPOSE 5432
+
+# Add VOLUMEs to allow backup of config, logs and databases
+VOLUME  ["/etc/postgresql", "/var/log/postgresql", "/var/lib/postgresql"]
+
 WORKDIR /home
+ENTRYPOINT ["/etc/init.d/postgresql", "start"]
